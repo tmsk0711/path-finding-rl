@@ -4,6 +4,7 @@ from pyglet.gl import *
 import numpy as np
 import pandas as pd
 import os
+import random
 
 
 
@@ -13,6 +14,7 @@ obs_reward = 0.1
 goal_reward = 10
 print('reward:' , move_reward, obs_reward, goal_reward)
 
+__file__ = '/home/ogangza/sun_path_finding/path-finding-rl/data'
 local_path = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
@@ -28,6 +30,9 @@ class Simulator:
         self.height = 10
         self.width = 9
         self.inds = list(ascii_uppercase)[:17]
+#        print(self.inds)
+#         ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q']
+     
 
     def set_box(self):
         '''
@@ -37,17 +42,28 @@ class Simulator:
         따라서 가져와야하는 아이템 좌표와 end point 좌표(처음 시작했던 좌표로 돌아와야하므로)가 들어가게 된다.
         '''
         box_data = pd.read_csv(os.path.join(local_path, "./data/box.csv"))
-
+        # 아이템 위치 ex) 5,0,A | 4,0 B
+        
         # 물건이 들어있을 수 있는 경우
         for box in box_data.itertuples(index = True, name ='Pandas'):
+            # print(box)
+            # Pandas(Index=0, row=5, col=0, item='A')
             self.grid[getattr(box, "row")][getattr(box, "col")] = 100
 
         # 물건이 실제 들어있는 경우
         order_item = list(set(self.inds) & set(self.items))
+#         print("order_item : ",order_item)
+        # [M,L,H]
         order_csv = box_data[box_data['item'].isin(order_item)]
-
+#         print("order_csv : ",order_csv)
+        # row, col, item
+        
         for order_box in order_csv.itertuples(index = True, name ='Pandas'):
             self.grid[getattr(order_box, "row")][getattr(order_box, "col")] = -100
+#             print("order_box : ",order_box)
+#             order_box :  Pandas(Index=7, row=0, col=3, item='H')
+#             order_box :  Pandas(Index=11, row=0, col=7, item='L')
+#             order_box :  Pandas(Index=12, row=0, col=8, item='M')
             # local target에 가야 할 위치 좌표 넣기
             self.local_target.append(
                 [getattr(order_box, "row"),
@@ -56,7 +72,7 @@ class Simulator:
 
         self.local_target.sort()
         self.local_target.append([9,4]) 
-
+        print(self.local_target)
         # 알파벳을 Grid에 넣어서 -> grid에 2Dconv 적용 가능
 
     def set_obstacle(self):
@@ -182,7 +198,19 @@ class Simulator:
         (Hint : 시작 위치 (9,4)에서 up말고 다른 action은 전부 장애물이므로 action을 고정하는 것이 좋음)
         '''
 
+        #==============================수정
+#         print("local_target",self.local_target)
+        
+        local_target_len = len(self.local_target)
+        
+#         for i in range(local_target_len):
+            
+#             self.terminal_location = self.local_target[i]
+        
+        
+            #==============================수정
         self.terminal_location = self.local_target[0]
+       
         cur_x,cur_y = self.curloc
         self.actions.append((cur_x, cur_y))
 
@@ -247,30 +275,75 @@ class Simulator:
                     render_cls.viewer.close()
                     display.stop()
         
-        return self.grid, reward, self.cumulative_reward, self.done, goal_ob_reward
+        return self.grid, reward, self.cumulative_reward, self.done, goal_ob_reward        
 
+"========================================================agent"
+class Agent():
+    def __init__(self):
+        pass        
 
+    def select_action(self):
+        coin = random.random()
+        if coin < 0.25:
+            action = 0
+        elif coin < 0.5:
+            action = 1
+        elif coin < 0.75:
+            action = 2
+        else:
+            action = 3
+        return action
+    
+    
 if __name__ == "__main__":
 
     sim = Simulator()
     files = pd.read_csv("./data/factory_order_train.csv")
+    agent = Agent()
    
-    for epi in range(2): # len(files)):
+    for epi in range(1): # len(files)):
         items = list(files.iloc[epi])[0]
+        print('items : ',items)
         done = False
         i = 0
         obs = sim.reset(epi)
-        actions = [0, 0, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1]
+        print("obs: ",obs)
+#         actions = [0, 0, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1]
 
         while done == False:
+            actions = agent.select_action()
             
             i += 1
-            next_obs, reward, cumul ,done, goal_reward = sim.step(actions[i])
-
+            next_obs, reward, cumul ,done, goal_reward = sim.step(actions)
+    
+            print("next_obs: ",next_obs)
+            print("reward: ",reward)
+            print("cumul: ",cumul)
+            print("done: ",done)
+            print("goal_reward: ",goal_reward)
             obs = next_obs
 
             if (done == True) or (i == (len(actions)-1)):
                 i =0
+                
+        
+    
+        
+#         while done == False:
+# #             actions = agent.select_action()
+# #             print('actions:',actions)
+#             i += 1
+#             next_obs, reward, cumul ,done, goal_reward = sim.step(actions[i])
+# #             print(actions[i])    
+#             print("next_obs: ",next_obs)
+#             print("reward: ",reward)
+#             print("cumul: ",cumul)
+#             print("done: ",done)
+#             print("goal_reward: ",goal_reward)
+#             obs = next_obs
+
+#             if (done == True) or (i == (len(actions)-1)):
+#                 i =0
 
 
             
