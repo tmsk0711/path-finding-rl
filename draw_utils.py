@@ -13,13 +13,18 @@ black_rgb = (0, 0, 0)
 obstacle_rgb = (204/255, 204/255, 204/255)
 agent_rgb = (000/255, 51/255, 000/255) # (147/255, 122/255, 219/255)
 box_rgb = (153/255, 204/255, 153/255)
-height = 10 # 10 * 10
+
+# 태양 타겟 박스 색 추가
+order_box_rgb = (255,0,0)
+
+height = 10 # 10 * 10s
 width = 9 
 RAD2DEG = 57.29577951308232
 
 
 class Attr(object):
     def enable(self):
+
         raise NotImplementedError
     def disable(self):
         pass
@@ -145,20 +150,33 @@ class FilledPolygon(Geom):
 
 
 class Render():
-    def __init__(self, screen_width, screen_height, unit, start_point, data_path, log_path):
+    def __init__(self, local_target, screen_width, screen_height, unit, start_point, data_path, log_path):
         if not os.path.exists(log_path):
             os.mkdir(log_path)
         self.log_path = log_path
         self.unit = unit
+#         self.local_target = unit
         self.movement = []
         self.boxes = []
+
         self.obstacles = []
+        
+        #### 태양 order_box 추가, csv 저장
+        self.order_box = []      
+        self.local_target = local_target
+        if self.local_target:     
+            order_box_arr = np.array(self.local_target)
+            df = pd.DataFrame(order_box_arr)
+            df.columns = ['row','col']
+            df.to_csv('./data/order_box.csv',index=False)
+            
         
         self.viewer = Viewer(screen_width, screen_height)
         self.draw_initial(data_path, type_="box")
         self.draw_initial(data_path, type_="obstacles")
+        self.draw_initial(data_path, type_="order_box")
         self.update_movement(start_point, 0)
-
+    
     def draw_initial(self, data_path, type_):
         if type_ == "box":
             position_data = pd.read_csv(os.path.join(data_path, "box.csv"))
@@ -166,21 +184,33 @@ class Render():
         elif type_ == "obstacles":
             position_data = pd.read_csv(os.path.join(data_path, "obstacles.csv"))
             color = obstacle_rgb
+            
+        # 태양 분기 추가   
+        elif type_ == "order_box":
+            position_data = pd.read_csv(os.path.join(data_path, "order_box.csv"))
+            color = order_box_rgb     
+      
         else:
             # TODO error
             pass
-
+        print(position_data)
+        # csv change to list
         for line in position_data.itertuples(index = True, name ='Pandas'):
             if type_ == "box":
                 self.boxes.append((getattr(line, "row"), getattr(line, "col")))
             elif type_ == "obstacles":
-                self.obstacles.append((getattr(line, "row"), getattr(line, "col")))
+                self.obstacles.append((getattr(line, "row"), getattr(line, "col")))              
+                # 태양 분기 추가      
+            elif type == "order_box":
+                self.order_box.append((getattr(line, "row"), getattr(line, "col")))
+                
             self.create_rectangle(
                 x=getattr(line, "col") * self.unit,
                 y=(height - getattr(line, "row") - 1) * self.unit,
                 width=self.unit, 
                 height=self.unit, 
                 fill=color)
+               
 
     def _add_rendering_entry(self, entry, permanent=False):
         if permanent:
@@ -189,6 +219,7 @@ class Render():
             self.viewer.add_onetime(entry)
     
     def create_rectangle(self, x, y, width, height, fill):
+        print(x,y,width,height,fill)
         ps = [(x, y), ((x + width), y), ((x + width), (y + height)), (x, (y + height))]
         rect = FilledPolygon(ps)
         rect.set_color(fill[0], fill[1], fill[2])
@@ -209,11 +240,18 @@ class Render():
         circ.add_attr(Transform())
         self._add_rendering_entry(circ, permanent=True)
 
+    
+    #### 수정 해야되는부분
     def remove_circle(self, x, y, diameter, resolution=20):
         if (x, y) in self.boxes:
             color = box_rgb
         elif (x, y) in self.obstacles:
             color = obstacle_rgb
+            
+         # 태양 분기 추가          
+        elif (x, y) in self.order_box:            
+            color = order_box_rgb
+          
         else:
             color = white_rgb
         c = (x + self.unit / 2, 
@@ -247,9 +285,9 @@ class Render():
         cv2.imshow('image', render_arr)
         cv2.imwrite(os.path.join(self.log_path, f"result_{idx}.png"), render_arr)
 
-    def save_gif(self,epi):
+    def save_gif(self,epi, pass_fail):
         imageio.mimsave(
-            os.path.join(self.log_path, './result'+str(int(epi))+'.gif'),
+            os.path.join(self.log_path, './result'+str(int(epi))+pass_fail+'.gif'),
             np.array(self.movement))
 
 
